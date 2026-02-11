@@ -172,8 +172,8 @@ class SDNRoutingEnv(gym.Env):
         # Execute the routing (update link utilization)
         self._execute_routing(selected_path)
 
-        # Calculate reward
-        reward = self._calculate_reward(selected_path)
+        # Calculate reward and metrics
+        reward, metrics = self._calculate_reward_with_metrics(selected_path)
         self.total_reward += reward
 
         # Write decision for controller to pick up (live mode)
@@ -193,6 +193,9 @@ class SDNRoutingEnv(gym.Env):
             'reward': reward,
             'total_reward': self.total_reward,
             'step': self.current_step,
+            'throughput': metrics['throughput'],
+            'delay': metrics['delay'],
+            'loss': metrics['loss']
         }
 
         return state, reward, terminated, truncated, info
@@ -323,22 +326,13 @@ class SDNRoutingEnv(gym.Env):
         for edge in self.link_utilization:
             self.link_utilization[edge] *= 0.95  # 5% decay per step
 
-    def _calculate_reward(self, path: List[int]) -> float:
+    def _calculate_reward_with_metrics(self, path: List[int]) -> Tuple[float, Dict[str, float]]:
         """
-        Calculate reward based on the routing decision.
-
-        Reward = w1 * throughput_score - w2 * delay_penalty - w3 * loss_penalty
-
-        Args:
-            path: Selected routing path
-
-        Returns:
-            Scalar reward value
+        Calculate reward and return individual performance metrics.
         """
         if not path or len(path) < 2:
-            return -10.0  # Heavy penalty for invalid path
+            return -10.0, {'throughput': 0.0, 'delay': 1.0, 'loss': 1.0}
 
-        # Calculate path metrics
         total_delay = 0.0
         max_utilization = 0.0
         min_bandwidth = float('inf')
@@ -353,28 +347,27 @@ class SDNRoutingEnv(gym.Env):
                 edge_key = (u, v) if (u, v) in self.link_utilization else (v, u)
                 util = self.link_utilization.get(edge_key, 0.0)
 
-                # Congestion adds delay
                 total_delay += delay * (1 + util * 3)
                 max_utilization = max(max_utilization, util)
                 min_bandwidth = min(min_bandwidth, bw)
 
-        # Throughput score (higher bandwidth = better)
         throughput_score = min(1.0, min_bandwidth / 100.0)
-
-        # Delay penalty (lower delay = less penalty)
         delay_penalty = min(1.0, total_delay / 50.0)
-
-        # Congestion/loss penalty
-        loss_penalty = max_utilization ** 2  # Quadratic penalty for congestion
+        loss_penalty = max_utilization ** 2
 
         reward = (self.w_throughput * throughput_score
                   - self.w_delay * delay_penalty
                   - self.w_loss * loss_penalty)
-
-        # Bonus for short paths
+        
         hop_bonus = 0.1 * (1.0 / len(path))
+        
+        metrics = {
+            'throughput': throughput_score * 100.0, # Mbps equivalent
+            'delay': total_delay, # ms equivalent
+            'loss': loss_penalty * 10.0 # Percentage proxy
+        }
 
-        return reward + hop_bonus
+        return reward + hop_bonus, metrics
 
     def _write_decision(self, path: List[int]):
         """

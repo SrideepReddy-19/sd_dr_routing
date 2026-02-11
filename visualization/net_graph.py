@@ -45,6 +45,7 @@ COLORS = {
     'text_muted':   '#94a3b8',   # Slate 400
     'label_bg':     '#1e293b',   # Slate 800
     'disabled':     '#ef4444',   # Red
+    'border':       '#1e2248',   # Border color
 }
 
 # Congestion colors (5-stop gradient)
@@ -202,32 +203,20 @@ def render_topology(stats: Dict = None, figsize: Tuple = (14, 9), dpi: int = 110
             ax.plot(x, y, color=color, linewidth=2.5, alpha=0.7, zorder=2,
                     solid_capstyle='round')
 
-        # Bandwidth + utilization label
-        mid_x = (pos[u][0] + pos[v][0]) / 2
-        mid_y = (pos[u][1] + pos[v][1]) / 2
-
-        # Offset label slightly to avoid overlap with link line
-        dx = pos[v][0] - pos[u][0]
-        dy = pos[v][1] - pos[u][1]
-        length = max(np.sqrt(dx**2 + dy**2), 0.01)
-        offset_x = -dy / length * 0.15
-        offset_y = dx / length * 0.15
-
-        if is_disabled:
-            label = f"{bw}M\nDOWN"
-            label_color = COLORS['disabled']
-        else:
-            label = f"{bw}M"
-            if util > 0:
-                label += f"\n{util*100:.0f}%"
-            label_color = COLORS['text']
-
-        ax.text(mid_x + offset_x, mid_y + offset_y, label,
-                fontsize=7, color=label_color, ha='center', va='center',
-                fontweight='bold', fontfamily='monospace',
-                bbox=dict(boxstyle='round,pad=0.25', facecolor=COLORS['label_bg'],
-                          edgecolor=COLORS['grid'], alpha=0.92, linewidth=0.5),
-                zorder=6)
+        if not is_disabled:
+            # Draw bandwidth/utilization labels
+            mid_x, mid_y = (pos[u][0] + pos[v][0]) / 2, (pos[u][1] + pos[v][1]) / 2
+            dx, dy = pos[v][0] - pos[u][0], pos[v][1] - pos[u][1]
+            length = max(0.01, np.sqrt(dx**2 + dy**2))
+            nx, ny = -dy/length, dx/length
+            
+            label = f"{int(bw)} Mbps\n{int(util*100)}% Util"
+            ax.text(mid_x + nx*0.16, mid_y + ny*0.16, label, 
+                    fontsize=9, color='white', ha='center', va='center',
+                    fontfamily='monospace', fontweight='bold', zorder=12,
+                    bbox=dict(facecolor=COLORS['bg_card'], alpha=0.8, edgecolor=COLORS['border'], 
+                              boxstyle='round,pad=0.3', lw=1),
+                    path_effects=[pe.withStroke(linewidth=2, foreground=COLORS['bg_dark'])])
 
     # ── Draw Switch Nodes ──
     switches = [n for n, d in G.nodes(data=True) if d.get('type') == 'switch']
@@ -282,24 +271,7 @@ def render_topology(stats: Dict = None, figsize: Tuple = (14, 9), dpi: int = 110
         ax.text(x, y - 0.18, h.upper(), fontsize=8, color=COLORS['text_muted'],
                 ha='center', va='top', fontweight='bold', zorder=10)
 
-    # ── Legend ──
-    legend_items = [
-        Line2D([0], [0], color='#10b981', linewidth=3, label='Low  <30%'),
-        Line2D([0], [0], color='#eab308', linewidth=3, label='Med  50–70%'),
-        Line2D([0], [0], color='#ef4444', linewidth=3, label='High  >85%'),
-        Line2D([0], [0], color=COLORS['path_color'], linewidth=4, label='DRL Path'),
-        Line2D([0], [0], color=COLORS['disabled'], linewidth=2, linestyle='--', label='Disabled'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor=COLORS['switch'],
-               markersize=10, label='Switch', linestyle='None'),
-        Line2D([0], [0], marker='o', color='w', markerfacecolor=COLORS['host'],
-               markersize=8, label='Host', linestyle='None'),
-    ]
-
-    leg = ax.legend(handles=legend_items, loc='upper right',
-                    fontsize=8, facecolor=COLORS['bg_card'], edgecolor=COLORS['grid'],
-                    labelcolor=COLORS['text_muted'], framealpha=0.95,
-                    borderpad=0.8, handlelength=2.5)
-    leg.get_frame().set_linewidth(0.5)
+    # Legend removed as requested
 
     # ── Title ──
     path_str = ' → '.join(s.upper() for s in selected_path) if selected_path else 'No Active Route'
