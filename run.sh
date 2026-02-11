@@ -24,7 +24,7 @@ LOG_DIR="$DATA_DIR/logs"
 
 # Configuration
 CONTROLLER_PORT=6633
-DASHBOARD_PORT=5000
+DASHBOARD_PORT=9000
 DRL_MODE="live"       # 'live' or 'simulation'
 DRL_EPISODES=1000
 

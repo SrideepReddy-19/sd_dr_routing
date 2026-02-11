@@ -1,0 +1,44 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "🚀 Run Dashboard",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "visualization.dashboard",
+            "args": [
+                "--port",
+                "9000",
+                "--debug"
+            ],
+            "jinja": true,
+            "justMyCode": true
+        },
+        {
+            "name": "🧠 Train Simulation",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "drl.train",
+            "args": [
+                "--mode",
+                "simulation",
+                "--episodes",
+                "100"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "📡 Run Ryu Controller (Linux)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/venv/bin/ryu-manager",
+            "args": [
+                "${workspaceFolder}/controller/ryu_controller.py",
+                "--ofp-tcp-listen-port",
+                "6633",
+                "--observe-links"
+            ],
+            "justMyCode": false
+        }
+    ]
+}

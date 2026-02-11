@@ -15,6 +15,7 @@ networkx>=3.0
 # Visualization
 matplotlib>=3.7
 flask>=3.0
+flasgger>=0.9
 
 # Utilities
 pyyaml>=6.0

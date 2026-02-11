@@ -13,7 +13,8 @@ import time
 import random
 import threading
 import networkx as nx
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, render_template_string, jsonify, request, redirect
+from flasgger import Swagger
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -40,6 +41,30 @@ app_state = {
     'continuous_send': False,
     'agents': {} # Store initialized agents here
 }
+
+# Swagger Configuration for Main App (Port 9000)
+swagger_config = {
+    "headers": [],
+    "specs": [
+        {
+            "endpoint": 'apispec_1',
+            "route": '/apispec_1.json',
+            "rule_filter": lambda rule: True,
+            "model_filter": lambda tag: True,
+        }
+    ],
+    "static_url_path": "/flasgger_static",
+    "swagger_ui": True,
+    "specs_route": "/apidocs/"
+}
+swagger = Swagger(app, config=swagger_config)
+
+# Separate app for Swagger UI on port 8000
+swagger_ui_app = Flask("SwaggerUI")
+
+@swagger_ui_app.route('/')
+def swagger_ui_index():
+    return redirect("http://localhost:9000/apidocs/")
 
 # Initialize and Load Trained Agents
 def init_agents():
@@ -1077,6 +1102,13 @@ def index():
 
 @app.route('/api/topologies')
 def api_topologies():
+    """
+    Get available network topologies.
+    ---
+    responses:
+      200:
+        description: List of available topologies and the current active one.
+    """
     return jsonify({
         'current': app_state['active_topology'],
         'available': {k: v['name'] for k, v in TOPOLOGIES.items()}
@@ -1115,10 +1147,24 @@ def api_set_algorithm():
 
 @app.route('/api/stats')
 def api_stats():
+    """
+    Get current network statistics.
+    ---
+    responses:
+      200:
+        description: Current network statistics including topology and link performance.
+    """
     return jsonify(read_stats())
 
 @app.route('/api/graph')
 def api_graph():
+    """
+    Get the network topology graph image (base64).
+    ---
+    responses:
+      200:
+        description: Base64 encoded PNG image of the network graph.
+    """
     try:
         stats = read_stats()
         for ls in stats.get('link_stats', {}).values():
@@ -1223,11 +1269,20 @@ def api_reset_links():
     return jsonify({'status': 'ok', 'active_links': 6})
 
 
-def start_dashboard(host='0.0.0.0', port=5000, debug=False):
+def start_dashboard(host='0.0.0.0', port=9000, debug=False):
+    # Start Swagger UI redirector on port 8000
+    def run_swagger_ui():
+        print(f"[Dashboard] Swagger UI bridge starting on http://{host}:8000")
+        swagger_ui_app.run(host=host, port=8000, debug=False, threaded=True)
+    
+    swagger_thread = threading.Thread(target=run_swagger_ui, daemon=True)
+    swagger_thread.start()
+    
     print(f"\n{'='*50}")
-    print(f"  SDN DRL Routing Dashboard")
-    print(f"  http://localhost:{port}")
+    print(f"  SDN DRL Routing Dashboard: http://{host}:{port}")
+    print(f"  Swagger API Documentation: http://{host}:8000")
     print(f"{'='*50}\n")
+    
     app.run(host=host, port=port, debug=debug, threaded=True)
 
 
@@ -1235,7 +1290,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', default='0.0.0.0')
-    parser.add_argument('--port', type=int, default=5000)
+    parser.add_argument('--port', type=int, default=9000)
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
     start_dashboard(args.host, args.port, args.debug)
